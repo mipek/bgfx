@@ -1,6 +1,6 @@
 /*
  * Copyright 2011-2015 Attila Kocsis, Branimir Karadzic. All rights reserved.
- * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
 #ifndef BGFX_RENDERER_METAL_H_HEADER_GUARD
@@ -62,7 +62,6 @@ namespace bgfx { namespace mtl
 #endif
 	}
 
-
 	// c++ wrapper
 	// objects with creation functions starting with 'new' has a refcount 1 after creation, object must be destroyed with release.
 	// commandBuffer, commandEncoders are autoreleased objects. Needs AutoreleasePool!
@@ -123,6 +122,11 @@ namespace bgfx { namespace mtl
 			[m_obj copyFromBuffer:_sourceBuffer sourceOffset:_sourceOffset sourceBytesPerRow:_sourceBytesPerRow
 			  sourceBytesPerImage:_sourceBytesPerImage sourceSize:_sourceSize toTexture:_destinationTexture
 				 destinationSlice:_destinationSlice destinationLevel:_destinationLevel destinationOrigin:_destinationOrigin];
+		}
+
+		void generateMipmapsForTexture(id<MTLTexture> _texture)
+		{
+			[m_obj generateMipmapsForTexture:_texture];
 		}
 
 #if BX_PLATFORM_OSX
@@ -246,8 +250,11 @@ namespace bgfx { namespace mtl
 			[m_obj dispatchThreadgroups:_threadgroupsPerGrid threadsPerThreadgroup:_threadsPerThreadgroup];
 		}
 
-		void dispatchThreadgroupsWithIndirectBuffer(id <MTLBuffer> _indirectBuffer,
-												NSUInteger _indirectBufferOffset, MTLSize _threadsPerThreadgroup)
+		void dispatchThreadgroupsWithIndirectBuffer(
+			  id <MTLBuffer> _indirectBuffer
+			, NSUInteger _indirectBufferOffset
+			, MTLSize _threadsPerThreadgroup
+			)
 		{
 			[m_obj dispatchThreadgroupsWithIndirectBuffer:_indirectBuffer indirectBufferOffset:_indirectBufferOffset threadsPerThreadgroup:_threadsPerThreadgroup];
 		}
@@ -269,9 +276,9 @@ namespace bgfx { namespace mtl
 	MTL_CLASS_END
 
 	MTL_CLASS(Device)
-		bool supportsFeatureSet(MTLFeatureSet _featureSet)
+		bool supportsFamily(MTLGPUFamily _featureSet)
 		{
-			return [m_obj supportsFeatureSet:_featureSet];
+			return [m_obj supportsFamily:_featureSet];
 		}
 
 		id<MTLLibrary> newLibraryWithData(const void* _data)
@@ -722,11 +729,11 @@ namespace bgfx { namespace mtl
 		return [_str UTF8String];
 	}
 
-#define MTL_RELEASE(_obj)        \
-			BX_MACRO_BLOCK_BEGIN \
-				[_obj release];  \
-				_obj = nil;      \
-			BX_MACRO_BLOCK_END
+#define MTL_RELEASE(_obj) \
+	BX_MACRO_BLOCK_BEGIN  \
+		[_obj release];   \
+		_obj = NULL;      \
+	BX_MACRO_BLOCK_END
 
 	// end of c++ wrapper
 
@@ -798,7 +805,7 @@ namespace bgfx { namespace mtl
 
 			if (NULL != m_dynamic)
 			{
-				BX_DELETE(g_allocator, m_dynamic);
+				bx::deleteObject(g_allocator, m_dynamic);
 				m_dynamic = NULL;
 			}
 		}
@@ -933,7 +940,7 @@ namespace bgfx { namespace mtl
 
 	void release(PipelineStateMtl* _ptr)
 	{
-		BX_DELETE(g_allocator, _ptr);
+		bx::deleteObject(g_allocator, _ptr);
 	}
 
 	struct TextureMtl
@@ -969,6 +976,7 @@ namespace bgfx { namespace mtl
 			if (0 == (m_flags & BGFX_SAMPLER_INTERNAL_SHARED))
 			{
 				MTL_RELEASE(m_ptr);
+				MTL_RELEASE(m_ptrMsaa);
 			}
 			MTL_RELEASE(m_ptrStencil);
 			for (uint32_t ii = 0; ii < m_numMips; ++ii)
@@ -999,6 +1007,7 @@ namespace bgfx { namespace mtl
 			, bool _vertex
 			, bool _fragment
 			, uint32_t _flags = BGFX_SAMPLER_INTERNAL_DEFAULT
+			, uint8_t _mip = UINT8_MAX
 			);
 
 		Texture getTextureMipLevel(int _mip);
@@ -1036,7 +1045,7 @@ namespace bgfx { namespace mtl
 		~SwapChainMtl();
 
 		void init(void* _nwh);
-		void resize(FrameBufferMtl &_frameBuffer, uint32_t _width, uint32_t _height, uint32_t _flags);
+		void resize(FrameBufferMtl &_frameBuffer, uint32_t _width, uint32_t _height, uint32_t _flags, uint32_t _maximumDrawableCount);
 
 		id <MTLTexture> 	currentDrawableTexture();
 
@@ -1073,6 +1082,8 @@ namespace bgfx { namespace mtl
 			);
 		void postReset();
 		uint16_t destroy();
+
+		void resolve();
 
 		SwapChainMtl* m_swapChain;
 		void* m_nwh;
@@ -1125,7 +1136,7 @@ namespace bgfx { namespace mtl
 
 		void init();
 		void shutdown();
-		uint32_t begin(uint32_t _resultIdx);
+		uint32_t begin(uint32_t _resultIdx, uint32_t _frameNum);
 		void end(uint32_t _idx);
 		void addHandlers(CommandBuffer& _commandBuffer);
 		bool get();
@@ -1134,14 +1145,16 @@ namespace bgfx { namespace mtl
 		{
 			void reset()
 			{
-				m_begin     = 0;
-				m_end       = 0;
-				m_pending   = 0;
+				m_begin    = 0;
+				m_end      = 0;
+				m_pending  = 0;
+				m_frameNum = 0;
 			}
 
 			uint64_t m_begin;
 			uint64_t m_end;
 			uint32_t m_pending;
+			uint32_t m_frameNum; // TODO: implement (currently stays 0)
 		};
 
 		uint64_t m_begin;
@@ -1149,7 +1162,7 @@ namespace bgfx { namespace mtl
 		uint64_t m_elapsed;
 		uint64_t m_frequency;
 
-		Result m_result[4*2];
+		Result m_result[BGFX_CONFIG_MAX_VIEWS+1];
 		bx::RingBufferControl m_control;
 	};
 

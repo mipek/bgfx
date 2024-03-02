@@ -1,6 +1,6 @@
 /*
 * Copyright 2021 elven cache. All rights reserved.
-* License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+* License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
 */
 
 /*
@@ -36,9 +36,9 @@
 
 namespace {
 
-#define FRAMEBUFFER_RT_COLOR		0
-#define FRAMEBUFFER_RT_DEPTH		1
-#define FRAMEBUFFER_RENDER_TARGETS	2
+#define FRAMEBUFFER_RT_COLOR       0
+#define FRAMEBUFFER_RT_DEPTH       1
+#define FRAMEBUFFER_RENDER_TARGETS 2
 
 enum Meshes
 {
@@ -162,7 +162,7 @@ struct RenderTarget
 	bgfx::FrameBufferHandle m_buffer;
 };
 
-void screenSpaceQuad(float _textureWidth, float _textureHeight, float _texelHalf, bool _originBottomLeft, float _width = 1.0f, float _height = 1.0f)
+void screenSpaceQuad(bool _originBottomLeft, float _width = 1.0f, float _height = 1.0f)
 {
 	if (3 == bgfx::getAvailTransientVertexBuffer(3, PosTexCoord0Vertex::ms_layout))
 	{
@@ -175,15 +175,13 @@ void screenSpaceQuad(float _textureWidth, float _textureHeight, float _texelHalf
 		const float miny = 0.0f;
 		const float maxy =  _height * 2.0f;
 
-		const float texelHalfW = _texelHalf / _textureWidth;
-		const float texelHalfH = _texelHalf / _textureHeight;
-		const float minu = -1.0f + texelHalfW;
-		const float maxu =  1.0f + texelHalfW;
+		const float minu = -1.0f;
+		const float maxu =  1.0f;
 
 		const float zz = 0.0f;
 
-		float minv = texelHalfH;
-		float maxv = 2.0f + texelHalfH;
+		float minv = 0.0f;
+		float maxv = 2.0f;
 
 		if (_originBottomLeft)
 		{
@@ -229,7 +227,6 @@ public:
 	ExampleBokeh(const char* _name, const char* _description)
 		: entry::AppI(_name, _description)
 		, m_currFrame(UINT32_MAX)
-		, m_texelHalf(0.0f)
 	{
 	}
 
@@ -243,12 +240,14 @@ public:
 		m_reset = BGFX_RESET_VSYNC;
 
 		bgfx::Init init;
-		init.type = args.m_type;
-
+		init.type     = args.m_type;
 		init.vendorId = args.m_pciId;
-		init.resolution.width = m_width;
+		init.platformData.nwh  = entry::getNativeWindowHandle(entry::kDefaultWindowHandle);
+		init.platformData.ndt  = entry::getNativeDisplayHandle();
+		init.platformData.type = entry::getNativeWindowHandleType();
+		init.resolution.width  = m_width;
 		init.resolution.height = m_height;
-		init.resolution.reset = m_reset;
+		init.resolution.reset  = m_reset;
 		bgfx::init(init);
 
 		// Enable debug text.
@@ -301,10 +300,6 @@ public:
 		// Init "prev" matrices, will be same for first frame
 		cameraGetViewMtx(m_view);
 		bx::mtxProj(m_proj, m_fovY, float(m_size[0]) / float(m_size[1]), 0.01f, 100.0f,  bgfx::getCaps()->homogeneousDepth);
-
-		// Get renderer capabilities info.
-		const bgfx::RendererType::Enum renderer = bgfx::getRendererType();
-		m_texelHalf = bgfx::RendererType::Direct3D9 == renderer ? 0.5f : 0.0f;
 
 		m_bokehTexture.idx = bgfx::kInvalidHandle;
 		updateDisplayBokehTexture(m_radiusScale, m_maxBlurSize, m_lobeCount, (1.0f-m_lobePinch), 1.0f, m_lobeRotation);
@@ -450,7 +445,7 @@ public:
 					);
 				bgfx::setTexture(0, s_depth, m_frameBufferTex[FRAMEBUFFER_RT_DEPTH]);
 				m_uniforms.submit();
-				screenSpaceQuad(float(m_width), float(m_height), m_texelHalf, caps->originBottomLeft);
+				screenSpaceQuad(caps->originBottomLeft);
 				bgfx::submit(view, m_linearDepthProgram);
 				++view;
 			}
@@ -479,7 +474,7 @@ public:
 					| BGFX_STATE_WRITE_A
 					);
 				bgfx::setTexture(0, s_color, m_frameBufferTex[FRAMEBUFFER_RT_COLOR]);
-				screenSpaceQuad(float(m_width), float(m_height), m_texelHalf, caps->originBottomLeft);
+				screenSpaceQuad(caps->originBottomLeft);
 				bgfx::submit(view, m_copyLinearToGammaProgram);
 				++view;
 			}
@@ -699,7 +694,7 @@ public:
 			bgfx::setTexture(0, s_color, lastTex);
 			bgfx::setTexture(1, s_depth, m_linearDepth.m_texture);
 			m_uniforms.submit();
-			screenSpaceQuad(float(m_width), float(m_height), m_texelHalf, _originBottomLeft);
+			screenSpaceQuad(_originBottomLeft);
 			bgfx::submit(view, m_dofDebugProgram);
 			++view;
 		}
@@ -717,7 +712,7 @@ public:
 			bgfx::setTexture(0, s_color, lastTex);
 			bgfx::setTexture(1, s_depth, m_linearDepth.m_texture);
 			m_uniforms.submit();
-			screenSpaceQuad(float(m_width), float(m_height), m_texelHalf, _originBottomLeft);
+			screenSpaceQuad(_originBottomLeft);
 			bgfx::submit(view, m_dofSinglePassProgram);
 			++view;
 		}
@@ -738,7 +733,7 @@ public:
 			bgfx::setTexture(0, s_color, lastTex);
 			bgfx::setTexture(1, s_depth, m_linearDepth.m_texture);
 			m_uniforms.submit();
-			screenSpaceQuad(float(halfWidth), float(halfHeight), m_texelHalf, _originBottomLeft);
+			screenSpaceQuad(_originBottomLeft);
 			bgfx::submit(view, m_dofDownsampleProgram);
 			++view;
 			lastTex = m_dofQuarterInput.m_texture;
@@ -761,7 +756,7 @@ public:
 				);
 			bgfx::setTexture(0, s_color, lastTex);
 			m_uniforms.submit();
-			screenSpaceQuad(float(halfWidth), float(halfHeight), m_texelHalf, _originBottomLeft);
+			screenSpaceQuad(_originBottomLeft);
 			bgfx::submit(view, m_dofQuarterProgram);
 			++view;
 			lastTex = m_dofQuarterOutput.m_texture;
@@ -778,7 +773,7 @@ public:
 			bgfx::setTexture(0, s_color, _colorTexture);
 			bgfx::setTexture(1, s_blurredColor, lastTex);
 			m_uniforms.submit();
-			screenSpaceQuad(float(m_width), float(m_height), m_texelHalf, _originBottomLeft);
+			screenSpaceQuad(_originBottomLeft);
 			bgfx::submit(view, m_dofCombineProgram);
 			++view;
 		}
@@ -904,9 +899,9 @@ public:
 		{
 			bgfx::destroy(m_bokehTexture);
 		}
-		BX_ASSERT(0 < _lobeCount);
+		BX_ASSERT(0 < _lobeCount, "");
 
-		const uint32_t bokehSize = 128;
+		const int32_t bokehSize = 128;
 
 		const bgfx::Memory* mem = bgfx::alloc(bokehSize*bokehSize*4);
 		bx::memSet(mem->data, 0x00, bokehSize*bokehSize*4);
@@ -926,8 +921,7 @@ public:
 
 			// apply shape to circular distribution
 			const float shapeScale = bokehShapeFromAngle(_lobeCount, _lobeRadiusMin, radiusDelta2x, _lobeRotation, theta);
-			BX_ASSERT(_lobeRadiusMin <= shapeScale);
-			BX_ASSERT(shapeScale <= _maxRadius);
+			BX_ASSERT(_lobeRadiusMin <= shapeScale, "");
 
 			float spiralCoordX = bx::cos(theta) * (radius * shapeScale);
 			float spiralCoordY = bx::sin(theta) * (radius * shapeScale);
@@ -941,10 +935,10 @@ public:
 			int32_t pixelCoordX = int32_t(bx::floor(spiralCoordX * float(bokehSize-1) + 0.5f));
 			int32_t pixelCoordY = int32_t(bx::floor(spiralCoordY * float(bokehSize-1) + 0.5f));
 
-			BX_ASSERT(0 <= pixelCoordX);
-			BX_ASSERT(0 <= pixelCoordY);
-			BX_ASSERT(pixelCoordX < bokehSize);
-			BX_ASSERT(pixelCoordY < bokehSize);
+			BX_ASSERT(0 <= pixelCoordX, "");
+			BX_ASSERT(0 <= pixelCoordY, "");
+			BX_ASSERT(pixelCoordX < bokehSize, "");
+			BX_ASSERT(pixelCoordY < bokehSize, "");
 
 			// plot sample position, track for total samples
 			uint32_t offset = (pixelCoordY * bokehSize + pixelCoordX) * 4;
@@ -994,7 +988,7 @@ public:
 	PassUniforms m_uniforms;
 	ModelUniforms m_modelUniforms;
 
-	// Uniforms to indentify texture samplers
+	// Uniforms to identify texture samplers
 	bgfx::UniformHandle s_albedo;
 	bgfx::UniformHandle s_color;
 	bgfx::UniformHandle s_normal;
@@ -1021,7 +1015,6 @@ public:
 
 	uint32_t m_currFrame;
 	float m_lightRotation = 0.0f;
-	float m_texelHalf = 0.0f;
 	float m_fovY = 60.0f;
 	bool m_recreateFrameBuffers = false;
 	float m_animationTime = 0.0f;

@@ -1,6 +1,6 @@
 #
-# Copyright 2011-2021 Branimir Karadzic. All rights reserved.
-# License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+# Copyright 2011-2024 Branimir Karadzic. All rights reserved.
+# License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
 #
 
 all:
@@ -40,15 +40,19 @@ all:
 #reused @make -s --no-print-directory build -C 34-mvs
 #reused @make -s --no-print-directory build -C 35-dynamic
 	@make -s --no-print-directory build -C 36-sky
-#	@make -s --no-print-directory build -C 37-gpudrivenrendering
+	@make -s --no-print-directory build -C 37-gpudrivenrendering
 	@make -s --no-print-directory build -C 38-bloom
-#	@make -s --no-print-directory build -C 39-assao
+	@make -s --no-print-directory build -C 39-assao
 	@make -s --no-print-directory build -C 40-svt
 	@make -s --no-print-directory build -C 41-tess
 	@make -s --no-print-directory build -C 42-bunnylod
 	@make -s --no-print-directory build -C 43-denoise
 	@make -s --no-print-directory build -C 44-sss
 	@make -s --no-print-directory build -C 45-bokeh
+	@make -s --no-print-directory build -C 46-fsr
+	@make -s --no-print-directory build -C 47-pixelformats
+	@make -s --no-print-directory build -C 48-drawindirect
+	@make -s --no-print-directory build -C 49-hextile
 
 rebuild:
 	@make -s --no-print-directory rebuild -C 01-cubes
@@ -87,15 +91,19 @@ rebuild:
 #reused @make -s --no-print-directory rebuild -C 34-mvs
 #reused @make -s --no-print-directory rebuild -C 35-dynamic
 	@make -s --no-print-directory rebuild -C 36-sky
-#	@make -s --no-print-directory rebuild -C 37-gpudrivenrendering
+	@make -s --no-print-directory rebuild -C 37-gpudrivenrendering
 	@make -s --no-print-directory rebuild -C 38-bloom
-#	@make -s --no-print-directory rebuild -C 39-assao
+	@make -s --no-print-directory rebuild -C 39-assao
 	@make -s --no-print-directory rebuild -C 40-svt
 	@make -s --no-print-directory rebuild -C 41-tess
 	@make -s --no-print-directory rebuild -C 42-bunnylod
 	@make -s --no-print-directory rebuild -C 43-denoise
 	@make -s --no-print-directory rebuild -C 44-sss
 	@make -s --no-print-directory rebuild -C 45-bokeh
+	@make -s --no-print-directory rebuild -C 46-fsr
+	@make -s --no-print-directory rebuild -C 47-pixelformats
+	@make -s --no-print-directory rebuild -C 48-drawindirect
+	@make -s --no-print-directory rebuild -C 49-hextile
 
 rebuild-embedded:
 	@make -s --no-print-directory rebuild -C 02-metaballs

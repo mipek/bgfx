@@ -1,11 +1,10 @@
 /*
- * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
- * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+ * Copyright 2011-2024 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
 #include "bgfx_p.h"
 #include "shader_dxbc.h"
-#include "shader_dx9bc.h"
 #include "shader_spirv.h"
 
 namespace bgfx
@@ -121,19 +120,10 @@ namespace bgfx
 		bx::WriterI* writer = reinterpret_cast<bx::WriterI*>(_userData);
 		char temp[512];
 		toString(temp, sizeof(temp), _instruction);
-		bx::write(writer, temp, (int32_t)bx::strLen(temp) );
-		bx::write(writer, '\n');
-		return true;
-	}
 
-	static bool printAsm(uint32_t _offset, const Dx9bcInstruction& _instruction, void* _userData)
-	{
-		BX_UNUSED(_offset);
-		bx::WriterI* writer = reinterpret_cast<bx::WriterI*>(_userData);
-		char temp[512];
-		toString(temp, sizeof(temp), _instruction);
-		bx::write(writer, temp, (int32_t)bx::strLen(temp) );
-		bx::write(writer, '\n');
+		bx::Error err;
+		bx::write(writer, temp, (int32_t)bx::strLen(temp), &err);
+		bx::write(writer, '\n', &err);
 		return true;
 	}
 
@@ -143,15 +133,17 @@ namespace bgfx
 		bx::WriterI* writer = reinterpret_cast<bx::WriterI*>(_userData);
 		char temp[512];
 		toString(temp, sizeof(temp), _instruction);
-		bx::write(writer, temp, (int32_t)bx::strLen(temp) );
-		bx::write(writer, '\n');
+
+		bx::Error err;
+		bx::write(writer, temp, (int32_t)bx::strLen(temp), &err);
+		bx::write(writer, '\n', &err);
 		return true;
 	}
 
 	void disassembleByteCode(bx::WriterI* _writer, bx::ReaderSeekerI* _reader, bx::Error* _err)
 	{
 		uint32_t magic;
-		bx::peek(_reader, magic);
+		bx::peek(_reader, magic, _err);
 
 		if (magic == SPV_CHUNK_HEADER)
 		{
@@ -167,9 +159,8 @@ namespace bgfx
 		}
 		else
 		{
-			Dx9bc dx9bc;
-			read(_reader, dx9bc, _err);
-			parse(dx9bc.shader, printAsm, _writer, _err);
+			BX_TRACE("Unrecognized shader binary format (magic: 0x%08x)!", magic);
+			BX_ERROR_SET(_err, kShaderInvalidHeader, "Failed to read shader binary. Invalid magic number.");
 		}
 	}
 
@@ -178,14 +169,14 @@ namespace bgfx
 		BX_ERROR_SCOPE(_err);
 
 		uint32_t magic;
-		bx::peek(_reader, magic);
+		bx::peek(_reader, magic, _err);
 
 		if (isShaderBin(magic) )
 		{
-			bx::read(_reader, magic);
+			bx::read(_reader, magic, _err);
 
 			uint32_t hashIn;
-			bx::read(_reader, hashIn);
+			bx::read(_reader, hashIn, _err);
 
 			uint32_t hashOut;
 
@@ -195,7 +186,7 @@ namespace bgfx
 			}
 			else
 			{
-				bx::read(_reader, hashOut);
+				bx::read(_reader, hashOut, _err);
 			}
 
 			uint16_t count;
@@ -244,7 +235,7 @@ namespace bgfx
 
 			if (!_err->isOk() ) { return; }
 
-			uint8_t* shaderCode = (uint8_t*)BX_ALLOC(g_allocator, shaderSize);
+			uint8_t* shaderCode = (uint8_t*)bx::alloc(g_allocator, shaderSize);
 			bx::read(_reader, shaderCode, shaderSize, _err);
 
 			bx::MemoryReader reader(shaderCode, shaderSize);
@@ -252,7 +243,7 @@ namespace bgfx
 
 			bx::write(_writer, '\0', _err);
 
-			BX_FREE(g_allocator, shaderCode);
+			bx::free(g_allocator, shaderCode);
 		}
 		else
 		{

@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
- * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+ * Copyright 2011-2024 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
 #include "common.h"
@@ -251,15 +251,6 @@ struct RendererTypeRemap
 {
 	bx::StringView           name;
 	bgfx::RendererType::Enum type;
-};
-
-static RendererTypeRemap s_rendererTypeRemap[] =
-{
-	{ "gl",    bgfx::RendererType::OpenGL     },
-	{ "d3d11", bgfx::RendererType::Direct3D11 },
-	{ "d3d11", bgfx::RendererType::Direct3D12 },
-	{ "vk",    bgfx::RendererType::Vulkan     },
-	{ "mtl",   bgfx::RendererType::Metal      },
 };
 
 struct View
@@ -800,7 +791,7 @@ struct View
 		bx::FileReader reader;
 		if (bx::open(&reader, filePath) )
 		{
-			bx::read(&reader, settings);
+			bx::read(&reader, settings, bx::ErrorAssert{});
 			bx::close(&reader);
 
 			if (!bx::fromString(&m_transitionTime, settings.get("view/transition") ) )
@@ -849,7 +840,7 @@ struct View
 			bx::FileWriter writer;
 			if (bx::open(&writer, filePath) )
 			{
-				bx::write(&writer, settings);
+				bx::write(&writer, settings, bx::ErrorAssert{});
 				bx::close(&writer);
 			}
 		}
@@ -1152,6 +1143,21 @@ void keyBindingHelp(const char* _bindings, const char* _description)
 	ImGui::Text("%s", _description);
 }
 
+inline std::string replaceAll(const char* _str, const char* _from, const char* _to)
+{
+	std::string str = _str;
+	size_t startPos = 0;
+	const size_t fromLen = bx::strLen(_from);
+	const size_t toLen   = bx::strLen(_to);
+	while ( (startPos = str.find(_from, startPos) ) != std::string::npos)
+	{
+		str.replace(startPos, fromLen, _to);
+		startPos += toLen;
+	}
+
+	return str;
+}
+
 void associate()
 {
 #if BX_PLATFORM_WINDOWS
@@ -1160,7 +1166,7 @@ void associate()
 	char exec[bx::kMaxFilePath];
 	GetModuleFileNameA(GetModuleHandleA(NULL), exec, sizeof(exec) );
 
-	std::string strExec = bx::replaceAll<std::string>(exec, "\\", "\\\\");
+	std::string strExec = replaceAll(exec, "\\", "\\\\");
 
 	std::string value;
 	bx::stringPrintf(value, "@=\"\\\"%s\\\" \\\"%%1\\\"\"\r\n\r\n", strExec.c_str() );
@@ -1207,34 +1213,60 @@ void associate()
 		}
 	}
 #elif BX_PLATFORM_LINUX
-	std::string str;
-	str += "#/bin/bash\n\n";
+
+	std::string mimeType;
+
+	auto associate = [&mimeType](const char* _ext)
+	{
+		std::string tmp;
+		bx::stringPrintf(tmp, "default texturev.desktop image/%s", _ext);
+
+		bx::ProcessReader reader;
+		bx::Error err;
+		if (bx::open(&reader, "xdg-mime", tmp.c_str(), &err) )
+		{
+			bx::close(&reader);
+		}
+		else
+		{
+			bx::printf("Failed to associate MIME type image/%s (error: \"%S\")!\n", _ext, &err.getMessage() );
+		}
+
+		bx::stringPrintf(mimeType, "image/%s;", _ext);
+	};
 
 	for (uint32_t ii = 0; ii < BX_COUNTOF(s_supportedExt); ++ii)
 	{
-		const char* ext = s_supportedExt[ii];
-		bx::stringPrintf(str, "xdg-mime default texturev.desktop image/%s\n", ext);
+		associate(s_supportedExt[ii]);
 	}
 
-	bx::stringPrintf(str, "xdg-mime default texturev.desktop image/x-dds\n");
-
-	str += "\n";
+	associate("x-dds");
 
 	bx::FileWriter writer;
 	bx::Error err;
-	if (bx::open(&writer, "/tmp/texturev.sh", false, &err) )
+	if (bx::open(&writer, "/usr/share/applications/texturev.desktop", false, &err) )
 	{
-		bx::write(&writer, str.c_str(), uint32_t(str.length()), &err);
+		bx::write(&writer, &err
+			, "[Desktop Entry]\n"
+			  "Version=%d.%d.%d\n"
+			  "Type=Application\n"
+			  "Name=texturev\n"
+			  "GenericName=bgfx Image/Texture Viewer\n"
+			  "Exec=texturev %%U\n"
+			  "Terminal=false\n"
+			  "Categories=Graphics\n"
+			  "StartupNotify=true\n"
+			  "MimeType=%s\n"
+			, BGFX_TEXTUREV_VERSION_MAJOR
+			, BGFX_TEXTUREV_VERSION_MINOR
+			, BGFX_API_VERSION
+			, mimeType.c_str()
+			);
 		bx::close(&writer);
-
-		if (err.isOk() )
-		{
-			bx::ProcessReader reader;
-			if (bx::open(&reader, "/bin/bash", "/tmp/texturev.sh", &err) )
-			{
-				bx::close(&reader);
-			}
-		}
+	}
+	else
+	{
+		bx::printf("Failed to create texturev desktop entry (error: \"%S\")! Permissions (try sudo)?!\n", &err.getMessage() );
 	}
 #endif // BX_PLATFORM_WINDOWS
 }
@@ -1248,8 +1280,8 @@ void help(const char* _error = NULL)
 
 	bx::printf(
 		  "texturev, bgfx texture viewer tool, version %d.%d.%d.\n"
-		  "Copyright 2011-2021 Branimir Karadzic. All rights reserved.\n"
-		  "License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause\n\n"
+		  "Copyright 2011-2024 Branimir Karadzic. All rights reserved.\n"
+		  "License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE\n\n"
 		, BGFX_TEXTUREV_VERSION_MAJOR
 		, BGFX_TEXTUREV_VERSION_MINOR
 		, BGFX_API_VERSION
@@ -1311,11 +1343,13 @@ int _main_(int _argc, char** _argv)
 	View view;
 	cmdAdd("view", cmdView, &view);
 
-	entry::setWindowFlags(entry::WindowHandle{0}, ENTRY_WINDOW_FLAG_ASPECT_RATIO, false);
-	entry::setWindowSize(entry::WindowHandle{0}, view.m_width, view.m_height);
+	entry::setWindowFlags(entry::kDefaultWindowHandle, ENTRY_WINDOW_FLAG_ASPECT_RATIO, false);
+	entry::setWindowSize(entry::kDefaultWindowHandle, view.m_width, view.m_height);
 
 	bgfx::Init init;
 	init.type = view.m_rendererType;
+	init.platformData.nwh  = entry::getNativeWindowHandle(entry::kDefaultWindowHandle);
+	init.platformData.ndt  = entry::getNativeDisplayHandle();
 	init.resolution.width  = view.m_width;
 	init.resolution.height = view.m_height;
 	init.resolution.reset  = BGFX_RESET_VSYNC;
@@ -1440,11 +1474,7 @@ int _main_(int _argc, char** _argv)
 
 	const char* filePath = _argc < 2 ? "" : _argv[1];
 
-	std::string path = filePath;
-	{
-		bx::FilePath fp(filePath);
-		view.updateFileList(fp);
-	}
+	view.updateFileList(filePath);
 
 	int exitcode = bx::kExitSuccess;
 	bgfx::TextureHandle texture = BGFX_INVALID_HANDLE;
@@ -1837,11 +1867,15 @@ int _main_(int _argc, char** _argv)
 
 			if (view.m_files)
 			{
+				ImGui::PushFont(ImGui::Font::Mono);
+				const float itemHeight = ImGui::GetTextLineHeightWithSpacing();
+				ImGui::PopFont();
+
 				char temp[bx::kMaxFilePath];
 				bx::snprintf(temp, BX_COUNTOF(temp), "%s##File", view.m_path.getCPtr() );
 
 				ImGui::SetNextWindowSize(
-					  ImVec2(400.0f, 400.0f)
+					  ImVec2(400.0f, 20*itemHeight)
 					, ImGuiCond_FirstUseEver
 					);
 
@@ -1850,7 +1884,6 @@ int _main_(int _argc, char** _argv)
 					if (ImGui::BeginChild("##file_list", ImVec2(0.0f, 0.0f) ) )
 					{
 						ImGui::PushFont(ImGui::Font::Mono);
-						const float itemHeight = ImGui::GetTextLineHeightWithSpacing();
 						const float listHeight =
 							  bx::max(1.0f, bx::floor(ImGui::GetWindowHeight()/itemHeight) )
 							* itemHeight
@@ -1861,29 +1894,26 @@ int _main_(int _argc, char** _argv)
 						{
 							const int32_t itemCount = int32_t(view.m_fileList.size() );
 
-							int32_t start, end;
-							ImGui::CalcListClipping(itemCount, itemHeight, &start, &end);
-
-							const int32_t index = int32_t(view.m_fileIndex);
-							if (index <= start)
-							{
-								ImGui::SetScrollY(ImGui::GetScrollY() - (start-index+1)*itemHeight);
-							}
-							else if (index >= end)
-							{
-								ImGui::SetScrollY(ImGui::GetScrollY() + (index-end+1)*itemHeight);
-							}
-
 							ImGuiListClipper clipper;
 							clipper.Begin(itemCount, itemHeight);
 
+							const  int32_t index = int32_t(view.m_fileIndex);
+							static int32_t oldIndex  = index;
+							const  int32_t direction = bx::clamp(index - oldIndex, -1, 1);
+							oldIndex = index;
+
+							bool currentVisible = false;
+
 							while (clipper.Step() )
 							{
+								currentVisible |= index > clipper.DisplayStart && index < clipper.DisplayEnd;
+
 								for (int32_t pos = clipper.DisplayStart; pos < clipper.DisplayEnd; ++pos)
 								{
 									ImGui::PushID(pos);
 
-									bool isSelected = uint32_t(pos) == view.m_fileIndex;
+									bool isSelected = pos == index;
+
 									if (ImGui::Selectable(view.m_fileList[pos].c_str(), &isSelected) )
 									{
 										view.m_fileIndex = pos;
@@ -1891,6 +1921,13 @@ int _main_(int _argc, char** _argv)
 
 									ImGui::PopID();
 								}
+							}
+
+							if (0 != direction && !currentVisible)
+							{
+								const int32_t num  = int32_t(listHeight / itemHeight);
+								const int32_t posY = index + (1 == direction ? 1-num : 0);
+								ImGui::SetScrollY(posY*itemHeight);
 							}
 
 							clipper.End();
@@ -1912,8 +1949,8 @@ int _main_(int _argc, char** _argv)
 
 				ImGui::Text(
 					"texturev, bgfx texture viewer tool " ICON_KI_WRENCH ", version %d.%d.%d.\n"
-					"Copyright 2011-2021 Branimir Karadzic. All rights reserved.\n"
-					"License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause\n"
+					"Copyright 2011-2024 Branimir Karadzic. All rights reserved.\n"
+					"License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE\n"
 					, BGFX_TEXTUREV_VERSION_MAJOR
 					, BGFX_TEXTUREV_VERSION_MINOR
 					, BGFX_API_VERSION
@@ -2064,8 +2101,7 @@ int _main_(int _argc, char** _argv)
 					bx::stringPrintf(title, "Failed to load %s!", filePath);
 				}
 
-				entry::WindowHandle handle = { 0 };
-				entry::setWindowTitle(handle, title.c_str() );
+				entry::setWindowTitle(entry::kDefaultWindowHandle, title.c_str() );
 			}
 
 			int64_t now = bx::getHPCounter();

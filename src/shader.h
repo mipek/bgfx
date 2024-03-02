@@ -1,6 +1,6 @@
 /*
- * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
- * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+ * Copyright 2011-2024 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
 #ifndef BGFX_SHADER_H
@@ -10,6 +10,9 @@
 
 namespace bgfx
 {
+	BX_ERROR_RESULT(kShaderInvalidHeader,      BX_MAKEFOURCC('S', 'H', 0, 1) );
+	BX_ERROR_RESULT(kShaderInvalidInstruction, BX_MAKEFOURCC('S', 'H', 0, 2) );
+
 	struct DescriptorType
 	{
 		enum Enum

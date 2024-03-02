@@ -1,6 +1,6 @@
 /*
  * Copyright 2013 Dario Manesku. All rights reserved.
- * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
 #include <bx/timer.h>
@@ -94,6 +94,7 @@ struct Camera
 
 	~Camera()
 	{
+		cmdRemove("move");
 		inputRemoveBindings("camBindings");
 	}
 
@@ -264,9 +265,9 @@ struct Camera
 	MouseCoords m_mouseNow;
 	MouseCoords m_mouseLast;
 
-	bx::Vec3 m_eye;
-	bx::Vec3 m_at;
-	bx::Vec3 m_up;
+	bx::Vec3 m_eye = bx::InitZero;
+	bx::Vec3 m_at  = bx::InitZero;
+	bx::Vec3 m_up  = bx::InitZero;
 	float m_horizontalAngle;
 	float m_verticalAngle;
 
@@ -287,7 +288,7 @@ void cameraCreate()
 
 void cameraDestroy()
 {
-	BX_DELETE(entry::getAllocator(), s_camera);
+	bx::deleteObject(entry::getAllocator(), s_camera);
 	s_camera = NULL;
 }
 

@@ -1,12 +1,12 @@
 /*
- * Copyright 2011-2021 Branimir Karadzic. All rights reserved.
- * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+ * Copyright 2011-2024 Branimir Karadzic. All rights reserved.
+ * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
  */
 
 #ifndef BGFX_CONFIG_H_HEADER_GUARD
 #define BGFX_CONFIG_H_HEADER_GUARD
 
-#include <bx/bx.h>
+#include <bx/bx.h> // bx::isPowerOf2
 
 // # Configuration options for bgfx.
 //
@@ -15,11 +15,11 @@
 //
 // When selecting rendering backends select all backends you want to include in the build.
 
-#ifndef BGFX_CONFIG_DEBUG
-#	define BGFX_CONFIG_DEBUG 0
-#endif // BGFX_CONFIG_DEBUG
+#ifndef BX_CONFIG_DEBUG
+#	error "BX_CONFIG_DEBUG must be defined in build script!"
+#endif // BX_CONFIG_DEBUG
 
-#if !defined(BGFX_CONFIG_RENDERER_DIRECT3D9)  \
+#if !defined(BGFX_CONFIG_RENDERER_AGC)        \
  && !defined(BGFX_CONFIG_RENDERER_DIRECT3D11) \
  && !defined(BGFX_CONFIG_RENDERER_DIRECT3D12) \
  && !defined(BGFX_CONFIG_RENDERER_GNM)        \
@@ -27,17 +27,17 @@
  && !defined(BGFX_CONFIG_RENDERER_NVN)        \
  && !defined(BGFX_CONFIG_RENDERER_OPENGL)     \
  && !defined(BGFX_CONFIG_RENDERER_OPENGLES)   \
- && !defined(BGFX_CONFIG_RENDERER_VULKAN)     \
- && !defined(BGFX_CONFIG_RENDERER_WEBGPU)
+ && !defined(BGFX_CONFIG_RENDERER_VULKAN)
 
-#	ifndef BGFX_CONFIG_RENDERER_DIRECT3D9
-#		define BGFX_CONFIG_RENDERER_DIRECT3D9 (0 \
-					|| BX_PLATFORM_WINDOWS       \
+#	ifndef BGFX_CONFIG_RENDERER_AGC
+#		define BGFX_CONFIG_RENDERER_AGC (0 \
+					|| BX_PLATFORM_PS5     \
 					? 1 : 0)
-#	endif // BGFX_CONFIG_RENDERER_DIRECT3D9
+#	endif // BGFX_CONFIG_RENDERER_AGC
 
 #	ifndef BGFX_CONFIG_RENDERER_DIRECT3D11
 #		define BGFX_CONFIG_RENDERER_DIRECT3D11 (0 \
+					|| BX_PLATFORM_LINUX          \
 					|| BX_PLATFORM_WINDOWS        \
 					|| BX_PLATFORM_WINRT          \
 					|| BX_PLATFORM_XBOXONE        \
@@ -46,6 +46,7 @@
 
 #	ifndef BGFX_CONFIG_RENDERER_DIRECT3D12
 #		define BGFX_CONFIG_RENDERER_DIRECT3D12 (0 \
+					|| BX_PLATFORM_LINUX          \
 					|| BX_PLATFORM_WINDOWS        \
 					|| BX_PLATFORM_WINRT          \
 					|| BX_PLATFORM_XBOXONE        \
@@ -59,10 +60,9 @@
 #	endif // BGFX_CONFIG_RENDERER_GNM
 
 #	ifndef BGFX_CONFIG_RENDERER_METAL
-#		define BGFX_CONFIG_RENDERER_METAL (0           \
-					|| (BX_PLATFORM_IOS && BX_CPU_ARM) \
-					|| (BX_PLATFORM_IOS && BX_CPU_X86) \
-					|| (BX_PLATFORM_OSX >= 101100)     \
+#		define BGFX_CONFIG_RENDERER_METAL (0 \
+					|| BX_PLATFORM_IOS       \
+					|| BX_PLATFORM_OSX       \
 					? 1 : 0)
 #	endif // BGFX_CONFIG_RENDERER_METAL
 
@@ -78,9 +78,7 @@
 
 #	ifndef BGFX_CONFIG_RENDERER_OPENGL
 #		define BGFX_CONFIG_RENDERER_OPENGL (0 \
-					|| BX_PLATFORM_BSD        \
 					|| BX_PLATFORM_LINUX      \
-					|| BX_PLATFORM_OSX        \
 					|| BX_PLATFORM_WINDOWS    \
 					? BGFX_CONFIG_RENDERER_OPENGL_MIN_VERSION : 0)
 #	endif // BGFX_CONFIG_RENDERER_OPENGL
@@ -95,7 +93,6 @@
 #		define BGFX_CONFIG_RENDERER_OPENGLES (0 \
 					|| BX_PLATFORM_ANDROID      \
 					|| BX_PLATFORM_EMSCRIPTEN   \
-					|| BX_PLATFORM_IOS          \
 					|| BX_PLATFORM_RPI          \
 					|| BX_PLATFORM_NX           \
 					? BGFX_CONFIG_RENDERER_OPENGLES_MIN_VERSION : 0)
@@ -111,14 +108,10 @@
 					? 1 : 0)
 #	endif // BGFX_CONFIG_RENDERER_VULKAN
 
-#	ifndef BGFX_CONFIG_RENDERER_WEBGPU
-#		define BGFX_CONFIG_RENDERER_WEBGPU 0
-#	endif // BGFX_CONFIG_RENDERER_WEBGPU
-
 #else
-#	ifndef BGFX_CONFIG_RENDERER_DIRECT3D9
-#		define BGFX_CONFIG_RENDERER_DIRECT3D9 0
-#	endif // BGFX_CONFIG_RENDERER_DIRECT3D9
+#	ifndef BGFX_CONFIG_RENDERER_AGC
+#		define BGFX_CONFIG_RENDERER_AGC 0
+#	endif // BGFX_CONFIG_RENDERER_AGC
 
 #	ifndef BGFX_CONFIG_RENDERER_DIRECT3D11
 #		define BGFX_CONFIG_RENDERER_DIRECT3D11 0
@@ -151,10 +144,6 @@
 #	ifndef BGFX_CONFIG_RENDERER_VULKAN
 #		define BGFX_CONFIG_RENDERER_VULKAN 0
 #	endif // BGFX_CONFIG_RENDERER_VULKAN
-
-#	ifndef BGFX_CONFIG_RENDERER_WEBGPU
-#		define BGFX_CONFIG_RENDERER_WEBGPU 0
-#	endif // BGFX_CONFIG_RENDERER_VULKAN
 #endif // !defined...
 
 #if BGFX_CONFIG_RENDERER_OPENGL && BGFX_CONFIG_RENDERER_OPENGL < 21
@@ -180,6 +169,11 @@
 #ifndef BGFX_CONFIG_USE_TINYSTL
 #	define BGFX_CONFIG_USE_TINYSTL 1
 #endif // BGFX_CONFIG_USE_TINYSTL
+
+/// Debug text maximum scale factor.
+#ifndef BGFX_CONFIG_DEBUG_TEXT_MAX_SCALE
+#	define BGFX_CONFIG_DEBUG_TEXT_MAX_SCALE 4
+#endif // BGFX_CONFIG_DEBUG_TEXT_MAX_SCALE
 
 /// Enable nVidia PerfHUD integration.
 #ifndef BGFX_CONFIG_DEBUG_PERFHUD

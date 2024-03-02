@@ -1,6 +1,6 @@
 #
-# Copyright 2011-2021 Branimir Karadzic. All rights reserved.
-# License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+# Copyright 2011-2024 Branimir Karadzic. All rights reserved.
+# License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
 #
 
 THISDIR:=$(dir $(lastword $(MAKEFILE_LIST)))
@@ -15,7 +15,7 @@ ifndef TARGET
 .PHONY: all
 all:
 	@echo Usage: make TARGET=# [clean, all, rebuild]
-	@echo "  TARGET=0 (hlsl  - d3d9  / Windows only!)"
+	@echo "  TARGET=0 (hlsl  - d3d11 / Windows only!)"
 	@echo "  TARGET=1 (hlsl  - d3d11 / Windows only!)"
 	@echo "  TARGET=3 (essl  - android)"
 	@echo "  TARGET=4 (glsl)"
@@ -52,26 +52,16 @@ else
 
 ADDITIONAL_INCLUDES?=
 
-ifeq ($(TARGET), 0)
-VS_FLAGS=--platform windows -p vs_3_0 -O 3
-FS_FLAGS=--platform windows -p ps_3_0 -O 3
-SHADER_PATH=shaders/dx9
-else
-ifeq ($(TARGET), 1)
-VS_FLAGS=--platform windows -p vs_5_0 -O 3
-FS_FLAGS=--platform windows -p ps_5_0 -O 3
-CS_FLAGS=--platform windows -p cs_5_0 -O 1
+ifeq ($(TARGET), $(filter $(TARGET), 0 1))
+VS_FLAGS=--platform windows -p s_5_0 -O 3
+FS_FLAGS=--platform windows -p s_5_0 -O 3
+CS_FLAGS=--platform windows -p s_5_0 -O 1
 SHADER_PATH=shaders/dx11
 else
-ifeq ($(TARGET), 2)
-VS_FLAGS=--platform nacl
-FS_FLAGS=--platform nacl
-SHADER_PATH=shaders/essl
-else
-ifeq ($(TARGET), 3)
-VS_FLAGS=--platform android
-FS_FLAGS=--platform android
-CS_FLAGS=--platform android
+ifeq ($(TARGET), $(filter $(TARGET), 2 3))
+VS_FLAGS=--platform android -p 100_es
+FS_FLAGS=--platform android -p 100_es
+CS_FLAGS=--platform android -p 300_es
 SHADER_PATH=shaders/essl
 else
 ifeq ($(TARGET), 4)
@@ -103,8 +93,6 @@ endif
 endif
 endif
 endif
-endif
-endif
 
 THISDIR := $(dir $(lastword $(MAKEFILE_LIST)))
 VS_FLAGS+=-i $(THISDIR)../src/ $(ADDITIONAL_INCLUDES)
@@ -127,7 +115,7 @@ VS_BIN = $(addprefix $(BUILD_INTERMEDIATE_DIR)/, $(addsuffix .bin, $(basename $(
 FS_BIN = $(addprefix $(BUILD_INTERMEDIATE_DIR)/, $(addsuffix .bin, $(basename $(notdir $(FS_SOURCES)))))
 CS_BIN = $(addprefix $(BUILD_INTERMEDIATE_DIR)/, $(addsuffix .bin, $(basename $(notdir $(CS_SOURCES)))))
 
-BIN = $(VS_BIN) $(FS_BIN)
+BIN = $(VS_BIN) $(FS_BIN) $(CS_BIN)
 ASM = $(VS_ASM) $(FS_ASM)
 
 ifeq ($(TARGET), $(filter $(TARGET),1 3 4 5 6 7))

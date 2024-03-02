@@ -1,6 +1,6 @@
 --
--- Copyright 2010-2021 Branimir Karadzic. All rights reserved.
--- License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause
+-- Copyright 2010-2024 Branimir Karadzic. All rights reserved.
+-- License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE
 --
 
 MODULE_DIR = path.getabsolute("../")
@@ -50,11 +50,6 @@ newoption {
 	description = "Enable building examples.",
 }
 
-newoption {
-	trigger = "with-webgpu",
-	description = "Enable webgpu experimental renderer.",
-}
-
 newaction {
 	trigger = "idl",
 	description = "Generate bgfx interface source code",
@@ -79,11 +74,14 @@ newaction {
 			csgen.write(csgen.gen_dllname(), "../bindings/cs/bgfx_dllname.cs")
 
 			local dgen = require "bindings-d"
-			dgen.write(dgen.gen_types(), "../bindings/d/types.d")
-			dgen.write(dgen.gen_funcs(), "../bindings/d/funcs.d")
+			dgen.write(dgen.gen(), "../bindings/d/package.d")
+			dgen.write(dgen.fakeEnumFile, "../bindings/d/fakeenum.d")
 
 			local csgen = require "bindings-bf"
 			csgen.write(csgen.gen(), "../bindings/bf/bgfx.bf")
+
+			local ziggen = require "bindings-zig"
+			ziggen.write(ziggen.gen(), "../bindings/zig/bgfx.zig")
 		end
 
 		os.exit()
@@ -97,14 +95,19 @@ newaction {
 
 		local f = io.popen("git rev-list --count HEAD")
 		local rev = string.match(f:read("*a"), ".*%S")
+
+		local codegen = require "codegen"
+		local idl = codegen.idl "bgfx.idl"
+		print("1." .. idl._version .. "." .. rev)
+
 		f:close()
 		f = io.popen("git log --format=format:%H -1")
 		local sha1 = f:read("*a")
 		f:close()
 		io.output(path.join(MODULE_DIR, "src/version.h"))
 		io.write("/*\n")
-		io.write(" * Copyright 2011-2021 Branimir Karadzic. All rights reserved.\n")
-		io.write(" * License: https://github.com/bkaradzic/bgfx#license-bsd-2-clause\n")
+		io.write(" * Copyright 2011-2024 Branimir Karadzic. All rights reserved.\n")
+		io.write(" * License: https://github.com/bkaradzic/bgfx/blob/master/LICENSE\n")
 		io.write(" */\n")
 		io.write("\n")
 		io.write("/*\n")
@@ -171,23 +174,6 @@ if not os.isdir(BX_DIR) or not os.isdir(BIMG_DIR) then
 	os.exit()
 end
 
-if _OPTIONS["with-webgpu"] then
-	DAWN_DIR = os.getenv("DAWN_DIR")
-
-	if not DAWN_DIR then
-		DAWN_DIR = path.getabsolute(path.join(BGFX_DIR, "../dawn"))
-	end
-
-	if not os.isdir(DAWN_DIR) and "wasm*" ~= _OPTIONS["gcc"] then
-		print("Dawn not found at \"" .. DAWN_DIR .. "\". git clone https://dawn.googlesource.com/dawn?")
-
-		print("For more info see: https://bkaradzic.github.io/bgfx/build.html")
-		os.exit()
-	end
-
-	_OPTIONS["with-windows"] = "10.0"
-end
-
 dofile (path.join(BX_DIR, "scripts/toolchain.lua"))
 if not toolchain(BGFX_BUILD_DIR, BGFX_THIRD_PARTY_DIR) then
 	return -- no action specified
@@ -203,7 +189,7 @@ end
 if _OPTIONS["with-sdl"] then
 	if os.is("windows") then
 		if not os.getenv("SDL2_DIR") then
-			print("Set SDL2_DIR enviroment variable.")
+			print("Set SDL2_DIR environment variable.")
 		end
 	end
 end
@@ -220,7 +206,6 @@ function exampleProjectDefaults()
 	debugdir (path.join(BGFX_DIR, "examples/runtime"))
 
 	includedirs {
-		path.join(BX_DIR,   "include"),
 		path.join(BIMG_DIR, "include"),
 		path.join(BGFX_DIR, "include"),
 		path.join(BGFX_DIR, "3rdparty"),
@@ -237,12 +222,9 @@ function exampleProjectDefaults()
 		"bgfx",
 		"bimg_decode",
 		"bimg",
-		"bx",
 	}
 
-	if _OPTIONS["with-webgpu"] then
-		usesWebGPU()
-	end
+	using_bx()
 
 	if _OPTIONS["with-sdl"] then
 		defines { "ENTRY_CONFIG_USE_SDL=1" }
@@ -283,7 +265,6 @@ function exampleProjectDefaults()
 		configuration { "osx*" }
 			linkoptions {
 				"-framework CoreVideo",
-				"-framework IOKit",
 			}
 
 		configuration {}
@@ -306,6 +287,7 @@ function exampleProjectDefaults()
 	configuration { "mingw*" }
 		targetextension ".exe"
 		links {
+			"comdlg32",
 			"gdi32",
 			"psapi",
 		}
@@ -366,10 +348,21 @@ function exampleProjectDefaults()
 			"GLESv2",
 		}
 
+	configuration { "android*", "Debug" }
+		linkoptions {
+			"-Wl,-soname,lib" .. project().name .. "Debug.so"
+		}
+
+	configuration { "android*", "Release" }
+		linkoptions {
+			"-Wl,-soname,lib" .. project().name .. "Release.so"
+		}
+
 	configuration { "wasm*" }
 		kind "ConsoleApp"
 
 		linkoptions {
+			"-sGL_ENABLE_GET_PROC_ADDRESS",
 			"-s TOTAL_MEMORY=32MB",
 			"-s ALLOW_MEMORY_GROWTH=1",
 			"--preload-file ../../../examples/runtime@/"
@@ -404,8 +397,9 @@ function exampleProjectDefaults()
 	configuration { "osx*" }
 		linkoptions {
 			"-framework Cocoa",
-			"-framework QuartzCore",
+			"-framework IOKit",
 			"-framework OpenGL",
+			"-framework QuartzCore",
 			"-weak_framework Metal",
 		}
 
@@ -414,9 +408,10 @@ function exampleProjectDefaults()
 		linkoptions {
 			"-framework CoreFoundation",
 			"-framework Foundation",
+			"-framework IOKit",
 			"-framework OpenGLES",
-			"-framework UIKit",
 			"-framework QuartzCore",
+			"-framework UIKit",
 			"-weak_framework Metal",
 		}
 
@@ -430,14 +425,6 @@ function exampleProjectDefaults()
 		kind "WindowedApp"
 		files {
 			path.join(BGFX_DIR, "examples/runtime/tvOS-Info.plist"),
-		}
-
-
-	configuration { "qnx*" }
-		targetextension ""
-		links {
-			"EGL",
-			"GLESv2",
 		}
 
 	configuration {}
@@ -500,9 +487,11 @@ function exampleProject(_combined, ...)
 
 end
 
-dofile "bgfx.lua"
-
 group "libs"
+dofile(path.join(BX_DIR,   "scripts/bx.lua"))
+dofile(path.join(BIMG_DIR, "scripts/bimg.lua"))
+dofile(path.join(BIMG_DIR, "scripts/bimg_decode.lua"))
+dofile "bgfx.lua"
 
 local function userdefines()
 	local defines = {}
@@ -520,11 +509,13 @@ BGFX_CONFIG = userdefines()
 
 bgfxProject("", "StaticLib", BGFX_CONFIG)
 
-dofile(path.join(BX_DIR,   "scripts/bx.lua"))
-dofile(path.join(BIMG_DIR, "scripts/bimg.lua"))
-dofile(path.join(BIMG_DIR, "scripts/bimg_decode.lua"))
+if _OPTIONS["with-shared-lib"] then
+	group "libs"
+	bgfxProject("-shared-lib", "SharedLib", BGFX_CONFIG)
+end
 
 if _OPTIONS["with-tools"] then
+	group "libs"
 	dofile(path.join(BIMG_DIR, "scripts/bimg_encode.lua"))
 end
 
@@ -584,22 +575,21 @@ or _OPTIONS["with-combined-examples"] then
 		, "43-denoise"
 		, "44-sss"
 		, "45-bokeh"
+		, "46-fsr"
+		, "47-pixelformats"
+		, "48-drawindirect"
+		, "49-hextile"
 		)
 
 	-- 17-drawstress requires multithreading, does not compile for singlethreaded wasm
---	if platform is not single-threaded then
+	if premake.gcc.namestyle == nil or not premake.gcc.namestyle == "Emscripten" then
 		exampleProject(false, "17-drawstress")
---	end
+	end
 
 	-- C99 source doesn't compile under WinRT settings
 	if not premake.vstudio.iswinrt() then
 		exampleProject(false, "25-c99")
 	end
-end
-
-if _OPTIONS["with-shared-lib"] then
-	group "libs"
-	bgfxProject("-shared-lib", "SharedLib", BGFX_CONFIG)
 end
 
 if _OPTIONS["with-tools"] then
